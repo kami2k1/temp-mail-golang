@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API – Temp Mail</title>
+  <meta name="description" content="Hướng dẫn sử dụng API của Temp Mail: lấy thư qua /messages, đổi email /randomize, tải tệp đính kèm." />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <script>(function(){try{var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="topbar" role="banner">
+    <div class="container topbar__inner">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">✉️</span>
+        <a class="brand-name" href="/" aria-label="Trang chủ Temp Mail">Temp Mail</a>
+      </div>
+      <nav class="nav" aria-label="Điều hướng chính">
+        <a href="/" class="nav-link">Hộp thư</a>
+        <a href="/gioi-thieu" class="nav-link">Giới thiệu</a>
+        <a href="/api" class="nav-link active">API</a>
+        <a href="https://t.me/kami2k1" target="_blank" rel="noopener" class="nav-link">Liên hệ</a>
+        <button id="theme-toggle" class="btn ghost" title="Chuyển chế độ sáng/tối" aria-label="Chuyển chế độ sáng/tối">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="btn-label">Tối</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="detail page" role="main">
+    <h1 style="margin:0 0 12px 0;font-size:28px">Hướng dẫn API</h1>
+    <p class="lead">API không cần đăng ký. Server tự cấp cho bạn một hộp thư tạm và quản lý bằng cookie <code>token</code>.</p>
+
+    <h2 style="margin-top:24px;font-size:20px">Tổng quan</h2>
+    <ul>
+      <li><b>Cơ chế danh tính:</b> lần đầu gọi, server tạo email ngẫu nhiên và trả về kèm cookie <code>token</code> (hiệu lực ~24h).</li>
+      <li><b>Gọi tiếp theo:</b> chỉ cần gửi kèm cookie. Trình duyệt mặc định làm điều này; với cURL/Node hãy bật gửi/nhận cookie.</li>
+      <li><b>Polling:</b> đề xuất gọi <code>/messages</code> mỗi 2–5 giây để cập nhật thư đến.</li>
+      <li><b>Nền tảng:</b> tất cả endpoint cùng domain với giao diện web.</li>
+    </ul>
+
+    <h2 style="margin-top:24px;font-size:20px">1) Lấy danh sách thư – GET <code>/messages</code></h2>
+    <p>Trả về hộp thư hiện tại và mảng thư <b>nhẹ</b> (không bao gồm <code>bodyHtml</code> để tiết kiệm băng thông). Lần đầu sẽ tạo email mới tự động.</p>
+    <pre style="white-space:pre-wrap;background:var(--panel-2);padding:12px;border:1px solid var(--border);overflow:auto">
+curl -i -c cookies.txt -b cookies.txt \
+  https://&lt;domain&gt;/messages
+
+// 200 OK (rút gọn)
+{
+  "mailbox": "abcxyz@your-domain.tld",
+  "data": [
+    {
+      "uid": 101,
+      "from": "no-reply@example.com",
+      "subject": "Welcome!",
+      "receivedAt": 1725510000,
+      "bodyPreview": "Welcome to ...",   // bản tóm tắt
+      "attachments": [ { "id": "ATTACH_ID", "filename": "file.pdf" } ]
+    }
+  ]
+}
+    </pre>
+    <p><b>Trường dữ liệu:</b> <code>uid</code> (số duy nhất), <code>from</code>, <code>subject</code>, <code>receivedAt</code>, <code>bodyPreview</code>, <code>attachments</code>.</p>
+
+    <h3 style="margin-top:12px;font-size:18px">1.1) Lấy nội dung thư – GET <code>/messages/:uid</code></h3>
+    <p>Chỉ gọi khi người dùng mở thư. Phản hồi bao gồm đầy đủ <code>bodyHtml</code> và <code>attachments</code>.</p>
+    <pre style="white-space:pre-wrap;background:var(--panel-2);padding:12px;border:1px solid var(--border);overflow:auto">
+curl -i -c cookies.txt -b cookies.txt https://&lt;domain&gt;/messages/101
+
+// 200 OK
+{ "uid":101, "subject":"Welcome!", "bodyHtml":"&lt;html&gt;...&lt;/html&gt;", "attachments":[...] }
+    </pre>
+
+    <h2 style="margin-top:24px;font-size:20px">2) Đổi địa chỉ email – POST <code>/randomize</code></h2>
+    <p>Tạo địa chỉ mới, cập nhật cookie. Dùng khi bạn muốn “làm sạch” hộp thư.</p>
+    <pre style="white-space:pre-wrap;background:var(--panel-2);padding:12px;border:1px solid var(--border);overflow:auto">
+curl -i -X POST -c cookies.txt -b cookies.txt \
+  https://&lt;domain&gt;/randomize
+
+// 200 OK
+{ "email": "newbox@your-domain.tld" }
+    </pre>
+
+    <h2 style="margin-top:24px;font-size:20px">3) Tải tệp đính kèm – GET <code>/attachments/:id</code></h2>
+    <p>Dùng <code>id</code> từ trường <code>attachments</code> của thư.</p>
+    <pre style="white-space:pre-wrap;background:var(--panel-2);padding:12px;border:1px solid var(--border);overflow:auto">
+curl -L -o file.bin https://&lt;domain&gt;/attachments/ATTACHMENT_ID
+    </pre>
+
+    <h2 style="margin-top:24px;font-size:20px">Ví dụ trong trình duyệt</h2>
+    <pre style="white-space:pre-wrap;background:var(--panel-2);padding:12px;border:1px solid var(--border);overflow:auto">
+// Lấy danh sách (nhẹ)
+const res = await fetch('/messages', { credentials: 'include', cache: 'no-store' });
+const list = await res.json();
+// Khi người dùng mở thư cụ thể
+const uid = list.data[0]?.uid;
+if(uid){
+  const full = await fetch(`/messages/${uid}`, { credentials: 'include', cache: 'no-store' }).then(r=>r.json());
+  console.log(full.bodyHtml);
+}
+
+// Đổi mail
+await fetch('/randomize', { method: 'POST', credentials: 'include' });
+    </pre>
+
+    <h2 style="margin-top:24px;font-size:20px">Ví dụ Node.js (axios)</h2>
+    <pre style="white-space:pre-wrap;background:var(--panel-2);padding:12px;border:1px solid var(--border);overflow:auto">
+import axios from 'axios';
+import tough from 'tough-cookie';
+import { wrapper } from 'axios-cookiejar-support';
+
+const jar = new tough.CookieJar();
+const client = wrapper(axios.create({ baseURL: 'https://&lt;domain&gt;', jar, withCredentials: true }));
+
+const m = await client.get('/messages');
+console.log(m.data.mailbox, m.data.data.length);
+
+await client.post('/randomize');
+    </pre>
+
+    <h2 style="margin-top:24px;font-size:20px">Mã lỗi thường gặp</h2>
+    <ul>
+      <li><b>200:</b> Thành công.</li>
+      <li><b>401:</b> Không có danh tính (hiếm gặp vì server tự cấp cookie; thử lại hoặc xoá cookie).</li>
+      <li><b>500:</b> Tạo email thất bại khi gọi <code>/randomize</code> (hãy thử lại).</li>
+    </ul>
+
+    <h2 style="margin-top:24px;font-size:20px">Ghi chú</h2>
+    <ul>
+      <li><b>Bảo mật:</b> Hộp thư tạm thời, không dùng cho dữ liệu nhạy cảm.</li>
+      <li><b>Tần suất:</b> Vui lòng giới hạn polling để tránh tải quá mức (2–5 giây/lần).</li>
+      <li><b>CORS:</b> Nếu gọi từ domain khác, cần bật <code>withCredentials</code> và cấu hình CORS phía server (mặc định dùng cùng domain là tốt nhất).</li>
+    </ul>
+  </main>
+
+  <footer class="footer" role="contentinfo">
+    <div class="container">
+      <span>© 2025 Temp Mail</span>
+      <nav class="footer-nav" aria-label="Liên kết phụ">
+        <a href="/">Hộp thư</a>
+        <a href="/gioi-thieu">Giới thiệu</a>
+        <a href="/api">API</a>
+        <a href="https://t.me/kami2k1" target="_blank" rel="noopener">Liên hệ</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    // chỉ xử lý toggle theme cho trang docs
+    (function(){
+      function apply(theme){ if(theme==='dark') document.documentElement.setAttribute('data-theme','dark'); else document.documentElement.removeAttribute('data-theme'); }
+      function init(){
+        var t = localStorage.getItem('theme');
+        if(!t){ t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
+        apply(t);
+        var btn = document.getElementById('theme-toggle');
+        if(btn){
+          var label = function(){ return document.documentElement.getAttribute('data-theme')==='dark' ? 'Sáng' : 'Tối'; };
+          var update = function(){ var el = btn.querySelector('.btn-label'); if(el) el.textContent = label(); };
+          update();
+          btn.addEventListener('click', function(){
+            var isDark = document.documentElement.getAttribute('data-theme')==='dark';
+            var next = isDark ? 'light' : 'dark';
+            apply(next); localStorage.setItem('theme', next); update();
+          });
+        }
+      }
+      document.addEventListener('DOMContentLoaded', init);
+    })();
+  </script>
+</body>
+</html>
