@@ -7,6 +7,7 @@ import (
 	// "kami/internal/stmp"
 	"kami/internal/utils"
 
+	"kami/internal/logger"
 	"kami/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -55,6 +56,7 @@ func Boot() {
 	// Initialize domain list and blacklist
 	_ = utils.LoadDomains("domain.json")
 	_ = utils.InitBlacklist("blacklist.json")
+	_ = logger.Init("log")
 
 	StartRouter()
 	setupFunctionRoutes()

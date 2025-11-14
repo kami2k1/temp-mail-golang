@@ -2,5 +2,5 @@ User-agent: *
 Allow: /
 
 # Update the sitemap domain if you host on a custom domain
-Sitemap: https://example.com/sitemap.xml
+Sitemap: https://temp-mail.phim.click/sitemap.xml
 
